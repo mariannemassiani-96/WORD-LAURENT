@@ -14,6 +14,7 @@ export interface SialPosition {
   quantite: number;
   totalHT: number;
   options: string[];
+  imageDataUrl?: string; // base64 data URL for position image
 }
 
 export interface DevisLine {
@@ -29,6 +30,7 @@ export interface DevisLine {
   prixVenteUnitaireHT: number;
   totalVenteHT: number;
   isSialImport: boolean;
+  imageDataUrl?: string; // base64 data URL for position image
 }
 
 export interface ExtraLine {

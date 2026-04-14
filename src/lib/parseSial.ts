@@ -130,6 +130,81 @@ function extractTextFromBinaryDoc(data: string): string {
   return runs.join("\n");
 }
 
+/**
+ * Extract images from RTF \pict groups as base64 data URLs.
+ * Returns array of data URLs in order of appearance.
+ */
+function extractImagesFromRtf(rtf: string): string[] {
+  const images: string[] = [];
+  let i = 0;
+
+  while (i < rtf.length) {
+    const pictIdx = rtf.indexOf("\\pict", i);
+    if (pictIdx === -1) break;
+
+    // Find the opening brace before \pict
+    let braceStart = pictIdx;
+    for (let j = pictIdx - 1; j >= Math.max(0, pictIdx - 10); j--) {
+      if (rtf[j] === "{") {
+        braceStart = j;
+        break;
+      }
+    }
+
+    // Match braces to find the end of the \pict group
+    let depth = 0;
+    let end = braceStart;
+    for (let j = braceStart; j < rtf.length; j++) {
+      if (rtf[j] === "{") depth++;
+      else if (rtf[j] === "}") depth--;
+      if (depth === 0) {
+        end = j + 1;
+        break;
+      }
+    }
+
+    const group = rtf.substring(braceStart, end);
+
+    // Determine image type
+    let mimeType = "image/png";
+    if (group.includes("jpegblip")) mimeType = "image/jpeg";
+    else if (group.includes("pngblip")) mimeType = "image/png";
+
+    // Extract hex data after the blip marker
+    const blipMatch = group.match(/(?:pngblip|jpegblip)\s*/);
+    if (blipMatch) {
+      const hexStart = group.indexOf(blipMatch[0]) + blipMatch[0].length;
+      let hexPart = group.substring(hexStart);
+      // Remove control words, braces, whitespace - keep only hex chars
+      hexPart = hexPart.replace(/\\[a-z]+\d*\s*/g, "");
+      hexPart = hexPart.replace(/[{}\s\r\n]/g, "");
+
+      if (hexPart.length > 20) {
+        // Convert hex to base64
+        try {
+          const bytes = new Uint8Array(hexPart.length / 2);
+          for (let b = 0; b < hexPart.length; b += 2) {
+            bytes[b / 2] = parseInt(hexPart.substring(b, b + 2), 16);
+          }
+          // Convert to base64
+          let binary = "";
+          for (let b = 0; b < bytes.length; b++) {
+            binary += String.fromCharCode(bytes[b]);
+          }
+          const base64 = btoa(binary);
+          images.push(`data:${mimeType};base64,${base64}`);
+        } catch {
+          // Skip invalid images
+        }
+      }
+    }
+
+    i = end;
+  }
+
+  return images;
+}
+
 function parseAmount(str: string): number {
   // Parse "€ 707,63" or "5 661,04" or "€ 6 764,98" or "E 5 542,15"
   let cleaned = str
@@ -160,10 +235,16 @@ export function parseSialRtf(fileContent: string): SialPosition[] {
   const isRtf = fileContent.trimStart().startsWith("{\\rtf");
   const text = isRtf ? stripRtf(fileContent) : extractTextFromBinaryDoc(fileContent);
 
-  const positions: SialPosition[] = [];
+  // Extract images from RTF
+  const images = isRtf ? extractImagesFromRtf(fileContent) : [];
+  // In SIAL RTF: image[0] = header logo, image[1..N] = position images
+  // Filter out small images (logos) - keep only product drawings (>10KB base64)
+  const productImages = images.filter((img) => img.length > 15000);
+  const headerLogo = images.find((img) => img.length > 1000 && img.length <= 15000);
+
+  let positions: SialPosition[] = [];
 
   // Strategy 1: pipe-separated format (RTF output)
-  // Pattern: "Position N|TYPE||" or "Position N|TYPE|"
   const posRegex = /Position\s+(\d+)\|([^|\n]*)\|/g;
   const matches: { index: number; position: number; type: string }[] = [];
   let m;
@@ -176,26 +257,42 @@ export function parseSialRtf(fileContent: string): SialPosition[] {
   }
 
   if (matches.length > 0) {
-    return parsePipeSeparated(text, matches);
+    positions = parsePipeSeparated(text, matches);
+  } else {
+    // Strategy 2: plain text format (from binary .doc extraction)
+    const plainPosRegex = /Position\s+(\d+)\s{2,}(.+)/g;
+    const plainMatches: { index: number; position: number; title: string }[] = [];
+    while ((m = plainPosRegex.exec(text)) !== null) {
+      plainMatches.push({
+        index: m.index,
+        position: parseInt(m[1]),
+        title: m[2].trim(),
+      });
+    }
+
+    if (plainMatches.length > 0) {
+      positions = parsePlainText(text, plainMatches);
+    }
   }
 
-  // Strategy 2: plain text format (from binary .doc extraction)
-  // Pattern: "Position 1       Coulissant 4 Vantaux..."
-  const plainPosRegex = /Position\s+(\d+)\s{2,}(.+)/g;
-  const plainMatches: { index: number; position: number; title: string }[] = [];
-  while ((m = plainPosRegex.exec(text)) !== null) {
-    plainMatches.push({
-      index: m.index,
-      position: parseInt(m[1]),
-      title: m[2].trim(),
-    });
+  // Assign product images to positions
+  for (let i = 0; i < positions.length && i < productImages.length; i++) {
+    positions[i].imageDataUrl = productImages[i];
   }
 
-  if (plainMatches.length > 0) {
-    return parsePlainText(text, plainMatches);
+  // Store header logo on first position as a marker (we'll use it in the UI)
+  if (headerLogo && positions.length > 0) {
+    // Header logo is stored separately - we pass it via a special convention
+    // First position gets a _headerLogo property
+    (positions as unknown as Record<string, unknown>)._headerLogo = headerLogo;
   }
 
   return positions;
+}
+
+/** Extract header logo from parsed positions (if available) */
+export function getHeaderLogo(positions: SialPosition[]): string | undefined {
+  return (positions as unknown as Record<string, unknown>)._headerLogo as string | undefined;
 }
 
 function parsePipeSeparated(

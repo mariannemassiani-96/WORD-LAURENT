@@ -14,6 +14,7 @@ import {
   TableLayoutType,
 } from "docx";
 import { DevisConfig, DevisLine, ExtraLine } from "./types";
+import { CGV_CASAPERTURA } from "./cgv";
 
 function fmt(n: number): string {
   return n.toLocaleString("fr-FR", {
@@ -512,17 +513,23 @@ export async function generateWord(config: DevisConfig): Promise<Blob> {
             alignment: AlignmentType.CENTER,
           }),
           new Paragraph({ children: [] }),
-          ...[
-            "1. DISPOSITIONS GENERALES :\nSauf conventions spéciales ayant fait l'objet d'une acceptation express de la part du vendeur SAS CASAPERTURA et par écrit, toutes les offres de travaux de pose et d'installation de menuiseries et produits d'aménagement associés, objet du devis adossé aux présentes Conditions Générales de vente sont régies par les conditions générales indiquées ci-après.",
-            "2. COMMANDES :\nToute commande ne sera traitée par le vendeur qu'après la réception du bon de commande ou du bon pour accord sur devis, confirmé par écrit et signé par le client.",
-            "3. RECEPTION DES TRAVAUX - GARANTIES :\nLe client ou son représentant doit être présent lors de la réception des travaux pour valider avec le vendeur que les travaux sont conformes et apposer au besoin des réserves sur le PV de réception.",
-          ].map(
-            (text) =>
-              new Paragraph({
-                children: [new TextRun({ text, size: 14, font: "Calibri" })],
-                spacing: { after: 120 },
-              })
-          ),
+          ...CGV_CASAPERTURA.split("\n")
+            .filter((l) => l.trim())
+            .slice(1) // Skip the title line
+            .map((line) => {
+              const isHeader = /^\d+\./.test(line.trim());
+              return new Paragraph({
+                children: [
+                  new TextRun({
+                    text: line,
+                    size: 14,
+                    font: "Calibri",
+                    bold: isHeader,
+                  }),
+                ],
+                spacing: { after: isHeader ? 60 : 40, before: isHeader ? 120 : 0 },
+              });
+            }),
         ],
       },
     ],

@@ -1,6 +1,7 @@
 "use client";
 
 import { DevisConfig } from "@/lib/types";
+import { CGV_CASAPERTURA } from "@/lib/cgv";
 
 interface DevisPreviewProps {
   config: DevisConfig;
@@ -22,6 +23,9 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
   const totalTTC = totalAvecEco + tva;
 
   let posCounter = 0;
+
+  // Parse CGV into paragraphs
+  const cgvParagraphs = CGV_CASAPERTURA.split("\n").filter((l) => l.trim());
 
   return (
     <div
@@ -60,7 +64,7 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
               A
             </td>
             <td className="px-3 py-1.5 border border-gray-300 font-semibold text-xs">
-              {config.client.nom || "—"}
+              {config.client.nom || "\u2014"}
             </td>
           </tr>
           <tr>
@@ -139,24 +143,52 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
                     {line.designation}
                   </td>
                 </tr>
-                {/* Details */}
-                {details.map(([key, val]) => (
-                  <tr key={key}>
-                    <td
-                      colSpan={2}
-                      className="border border-gray-200 px-3 py-0.5"
-                    ></td>
-                    <td className="border border-gray-200 px-3 py-0.5 text-xs font-semibold text-gray-600">
-                      {key}
-                    </td>
-                    <td
-                      colSpan={3}
-                      className="border border-gray-200 px-3 py-0.5 text-xs"
-                    >
-                      {val}
-                    </td>
-                  </tr>
-                ))}
+                {/* Image + Details row */}
+                <tr>
+                  {/* Product image */}
+                  <td
+                    colSpan={2}
+                    className="border border-gray-200 px-2 py-2 align-top"
+                    style={{ width: "130px" }}
+                  >
+                    {line.imageDataUrl ? (
+                      <img
+                        src={line.imageDataUrl}
+                        alt={`Position ${posCounter}`}
+                        style={{
+                          maxWidth: "120px",
+                          maxHeight: "150px",
+                          objectFit: "contain",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="bg-gray-100 flex items-center justify-center text-gray-400 text-xs"
+                        style={{ width: "120px", height: "100px" }}
+                      >
+                        Pas d&apos;image
+                      </div>
+                    )}
+                  </td>
+                  {/* Details */}
+                  <td
+                    colSpan={4}
+                    className="border border-gray-200 px-3 py-1 align-top"
+                  >
+                    <table className="w-full">
+                      <tbody>
+                        {details.map(([key, val]) => (
+                          <tr key={key}>
+                            <td className="py-0.5 text-xs font-semibold text-gray-600 w-40">
+                              {key}
+                            </td>
+                            <td className="py-0.5 text-xs">{val}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
                 {/* Total row */}
                 <tr className="bg-gray-50">
                   <td
@@ -224,7 +256,10 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
       </table>
 
       {/* Totals */}
-      <table className="border-collapse mb-4 ml-auto" style={{ width: "280px" }}>
+      <table
+        className="border-collapse mb-4 ml-auto"
+        style={{ width: "280px" }}
+      >
         <tbody>
           <tr>
             <td className="bg-[#2B4C7E] text-white font-bold px-3 py-1.5 border border-gray-300 text-xs">
@@ -243,7 +278,10 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
             </td>
           </tr>
           <tr>
-            <td className="px-3 py-0.5 border border-gray-200" colSpan={2}></td>
+            <td
+              className="px-3 py-0.5 border border-gray-200"
+              colSpan={2}
+            ></td>
           </tr>
           <tr>
             <td className="bg-[#2B4C7E] text-white font-bold px-3 py-1.5 border border-gray-300 text-xs">
@@ -281,6 +319,30 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
           <p>Crédit Agricole</p>
           <p>RIB 12006 00081 82110574530 59</p>
           <p>IBAN FR76 1200 6000 8182 1105 7453 059</p>
+        </div>
+      </div>
+
+      {/* CGV */}
+      <div
+        className="mt-8 pt-6 border-t-2 border-gray-300"
+        style={{ pageBreakBefore: "always" }}
+      >
+        <h2 className="text-center font-bold text-base mb-4 text-[#2B4C7E]">
+          Conditions Générales de Vente
+        </h2>
+        <div className="text-xs text-gray-700 leading-relaxed space-y-1">
+          {cgvParagraphs.slice(1).map((p, i) => {
+            // Detect section headers (start with number)
+            const isHeader = /^\d+\./.test(p.trim());
+            return (
+              <p
+                key={i}
+                className={isHeader ? "font-bold mt-3" : ""}
+              >
+                {p}
+              </p>
+            );
+          })}
         </div>
       </div>
     </div>

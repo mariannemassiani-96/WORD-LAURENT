@@ -60,6 +60,7 @@ export default function Home() {
       prixVenteUnitaireHT: pos.prixUnitaireHT * 1.3,
       totalVenteHT: pos.prixUnitaireHT * 1.3 * pos.quantite,
       isSialImport: true,
+      imageDataUrl: pos.imageDataUrl,
     }});
 
     // Compute eco-participation from SIAL data
