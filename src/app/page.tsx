@@ -41,7 +41,7 @@ export default function Home() {
 
   // Load saved devis list on mount
   useEffect(() => {
-    setSavedList(getSavedDevisList());
+    getSavedDevisList().then(setSavedList);
   }, []);
 
   const handleFileLoaded = useCallback((content: string) => {
@@ -91,15 +91,15 @@ export default function Home() {
     setActiveTab("form");
   }, []);
 
-  const handleSave = () => {
-    saveDevis(config);
-    setSavedList(getSavedDevisList());
+  const handleSave = async () => {
+    await saveDevis(config);
+    setSavedList(await getSavedDevisList());
     setSaveMsg("Sauvegardé !");
     setTimeout(() => setSaveMsg(""), 2000);
   };
 
-  const handleLoad = (id: string) => {
-    const loaded = loadDevis(id);
+  const handleLoad = async (id: string) => {
+    const loaded = await loadDevis(id);
     if (loaded) {
       setConfig(loaded);
       setImported(true);
@@ -107,9 +107,9 @@ export default function Home() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    deleteDevis(id);
-    setSavedList(getSavedDevisList());
+  const handleDelete = async (id: string) => {
+    await deleteDevis(id);
+    setSavedList(await getSavedDevisList());
   };
 
   const handleExportJson = () => exportDevisToJson(config);
@@ -239,7 +239,7 @@ export default function Home() {
                           {d.name}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {new Date(d.savedAt).toLocaleDateString("fr-FR", {
+                          {new Date(d.updated_at || "").toLocaleDateString("fr-FR", {
                             day: "2-digit",
                             month: "2-digit",
                             year: "numeric",
