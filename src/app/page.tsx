@@ -107,6 +107,18 @@ export default function Home() {
     }
   };
 
+  const handleDuplicate = async (id: string) => {
+    const loaded = await loadDevis(id);
+    if (loaded) {
+      const copy = {
+        ...loaded,
+        reference: `${loaded.reference || ""} (copie)`,
+      };
+      await saveDevis(copy);
+      setSavedList(await getSavedDevisList());
+    }
+  };
+
   const handleDelete = async (id: string) => {
     await deleteDevis(id);
     setSavedList(await getSavedDevisList());
@@ -254,6 +266,12 @@ export default function Home() {
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                         >
                           Ouvrir
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(d.id)}
+                          className="text-green-600 hover:text-green-800 text-sm font-medium"
+                        >
+                          Dupliquer
                         </button>
                         <button
                           onClick={() => handleDelete(d.id)}

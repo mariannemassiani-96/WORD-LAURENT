@@ -86,7 +86,7 @@ function buildPositionRows(line: DevisLine, index: number): TableRow[] {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Position ${index + 1}`,
+                  text: `Ligne ${index + 1}`,
                   bold: true,
                   size: 20,
                   font: "Calibri",
@@ -161,7 +161,7 @@ function buildPositionRows(line: DevisLine, index: number): TableRow[] {
           borders: thinBorders(),
           columnSpan: 2,
         }),
-        rightCell(`Total unitaire ht`),
+        rightCell(`Total unitaire HT`),
         rightCell(`\u20AC ${fmt(line.prixVenteUnitaireHT)}`),
         textCell(`x ${line.quantite}`),
         rightCell(`\u20AC ${fmt(line.totalVenteHT)}`, undefined, true),
@@ -181,7 +181,7 @@ function buildExtraLineRow(line: ExtraLine, startIndex: number, i: number): Tabl
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Position ${startIndex + i + 1}`,
+                  text: `Ligne ${startIndex + i + 1}`,
                   bold: true,
                   size: 20,
                   font: "Calibri",
@@ -221,7 +221,7 @@ function buildExtraLineRow(line: ExtraLine, startIndex: number, i: number): Tabl
           borders: thinBorders(),
           columnSpan: 2,
         }),
-        rightCell("Total unitaire ht"),
+        rightCell("Total unitaire HT"),
         rightCell(`\u20AC ${fmt(line.prixUnitaireHT)}`),
         textCell(`x ${line.quantite}`),
         rightCell(`\u20AC ${fmt(line.totalHT)}`, undefined, true),
@@ -262,10 +262,11 @@ export async function generateWord(config: DevisConfig): Promise<Blob> {
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [
-                  new TextRun({ text: "Page ", size: 16, font: "Calibri", color: "666666" }),
-                  new TextRun({ children: [PageNumber.CURRENT], size: 16, font: "Calibri", color: "666666" }),
-                  new TextRun({ text: " / ", size: 16, font: "Calibri", color: "666666" }),
-                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, font: "Calibri", color: "666666" }),
+                  new TextRun({ text: `CAS'APERTURA - Devis ${config.reference || ""}    `, size: 14, font: "Calibri", color: "666666" }),
+                  new TextRun({ text: "Page ", size: 14, font: "Calibri", color: "666666" }),
+                  new TextRun({ children: [PageNumber.CURRENT], size: 14, font: "Calibri", color: "666666" }),
+                  new TextRun({ text: " / ", size: 14, font: "Calibri", color: "666666" }),
+                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 14, font: "Calibri", color: "666666" }),
                 ],
               }),
             ],
@@ -282,7 +283,7 @@ export async function generateWord(config: DevisConfig): Promise<Blob> {
                     children: [
                       new Paragraph({
                         children: [
-                          new TextRun({ text: "CASAPERTURA", bold: true, size: 28, font: "Calibri" }),
+                          new TextRun({ text: "CAS'APERTURA", bold: true, size: 28, font: "Calibri" }),
                         ],
                       }),
                       new Paragraph({
@@ -539,7 +540,7 @@ export async function generateWord(config: DevisConfig): Promise<Blob> {
                 children: [
                   new TextRun({
                     text: line,
-                    size: 14,
+                    size: 10,
                     font: "Calibri",
                     bold: isHeader,
                   }),

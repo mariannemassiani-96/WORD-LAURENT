@@ -25,6 +25,9 @@ body {
   .print\:hidden {
     display: none !important;
   }
+  .print\:block {
+    display: block !important;
+  }
   .print\:p-0 {
     padding: 0 !important;
   }
@@ -33,14 +36,9 @@ body {
   }
   #devis-preview {
     box-shadow: none !important;
-    padding: 15mm !important;
+    padding: 10mm !important;
   }
   @page {
-    margin: 15mm;
-    @bottom-center {
-      content: "Page " counter(page) " / " counter(pages);
-      font-size: 9pt;
-      color: #666;
-    }
+    margin: 10mm 15mm 18mm 15mm;
   }
 }

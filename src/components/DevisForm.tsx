@@ -187,7 +187,7 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
       {config.lines.length > 0 && (
         <div className="bg-white rounded-xl shadow p-5">
           <h3 className="font-bold text-lg text-gray-800 mb-3">
-            Positions SIAL (avec marge)
+            Lignes SIAL (avec marge)
           </h3>
           <div className="space-y-4">
             {config.lines.map((line, i) => (
@@ -198,7 +198,7 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <span className="inline-block bg-blue-800 text-white text-xs font-bold px-2 py-1 rounded mr-2">
-                      Position {i + 1}
+                      Ligne {i + 1}
                     </span>
                     <span className="font-semibold text-gray-700">
                       {line.designation}
