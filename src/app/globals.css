@@ -35,4 +35,12 @@ body {
     box-shadow: none !important;
     padding: 15mm !important;
   }
+  @page {
+    margin: 15mm;
+    @bottom-center {
+      content: "Page " counter(page) " / " counter(pages);
+      font-size: 9pt;
+      color: #666;
+    }
+  }
 }

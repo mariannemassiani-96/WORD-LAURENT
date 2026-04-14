@@ -85,6 +85,18 @@ function stripRtf(rtf: string): string {
       }
       if (i + 1 < text.length) {
         const next = text[i + 1];
+        if (next === "~") {
+          // \~ = non-breaking space (used as thousands separator)
+          result += " ";
+          i += 2;
+          continue;
+        }
+        if (next === "-" || next === "_") {
+          // \- = optional hyphen, \_ = non-breaking hyphen
+          result += next === "_" ? "-" : "";
+          i += 2;
+          continue;
+        }
         if (next === "\\" || next === "{" || next === "}") {
           result += next;
           i += 2;

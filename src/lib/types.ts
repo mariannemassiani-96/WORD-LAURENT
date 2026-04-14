@@ -31,6 +31,7 @@ export interface DevisLine {
   totalVenteHT: number;
   isSialImport: boolean;
   imageDataUrl?: string; // base64 data URL for position image
+  options?: string[];
 }
 
 export interface ExtraLine {

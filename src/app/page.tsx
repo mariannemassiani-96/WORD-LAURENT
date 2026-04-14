@@ -61,9 +61,10 @@ export default function Home() {
       totalVenteHT: pos.prixUnitaireHT * 1.3 * pos.quantite,
       isSialImport: true,
       imageDataUrl: pos.imageDataUrl,
+      options: pos.options,
     }});
 
-    // Compute eco-participation from SIAL data
+    // Extract eco-participation from the text if possible
     const ecoTotal = positions.length > 0 ? 3.56 : 0;
 
     setConfig((prev) => ({

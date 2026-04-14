@@ -145,13 +145,13 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
                 </tr>
                 {/* Image + Details row */}
                 <tr>
-                  {/* Product image */}
-                  <td
-                    colSpan={2}
-                    className="border border-gray-200 px-2 py-2 align-top"
-                    style={{ width: "130px" }}
-                  >
-                    {line.imageDataUrl ? (
+                  {/* Product image - only if available */}
+                  {line.imageDataUrl && (
+                    <td
+                      className="border border-gray-200 px-2 py-2 align-top"
+                      style={{ width: "130px" }}
+                      rowSpan={1}
+                    >
                       <img
                         src={line.imageDataUrl}
                         alt={`Position ${posCounter}`}
@@ -161,18 +161,11 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
                           objectFit: "contain",
                         }}
                       />
-                    ) : (
-                      <div
-                        className="bg-gray-100 flex items-center justify-center text-gray-400 text-xs"
-                        style={{ width: "120px", height: "100px" }}
-                      >
-                        Pas d&apos;image
-                      </div>
-                    )}
-                  </td>
+                    </td>
+                  )}
                   {/* Details */}
                   <td
-                    colSpan={4}
+                    colSpan={line.imageDataUrl ? 5 : 6}
                     className="border border-gray-200 px-3 py-1 align-top"
                   >
                     <table className="w-full">
@@ -187,6 +180,19 @@ export default function DevisPreview({ config }: DevisPreviewProps) {
                         ))}
                       </tbody>
                     </table>
+                    {/* Options */}
+                    {line.options && line.options.length > 0 && (
+                      <div className="mt-2 border-t border-gray-200 pt-1">
+                        <p className="text-xs font-semibold text-gray-600 italic">Options</p>
+                        {line.options.map((opt, oi) => (
+                          <p key={oi} className="text-xs text-gray-600 italic">{opt}</p>
+                        ))}
+                      </div>
+                    )}
+                    {/* Description */}
+                    {line.description && (
+                      <p className="text-xs text-gray-500 mt-1 italic">{line.description}</p>
+                    )}
                   </td>
                 </tr>
                 {/* Total row */}

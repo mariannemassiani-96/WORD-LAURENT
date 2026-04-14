@@ -208,11 +208,36 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
                   </button>
                 </div>
 
-                {line.description && (
-                  <p className="text-sm text-gray-500 mb-2">
-                    {line.description}
-                  </p>
-                )}
+                {/* Editable designation and description */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500">
+                      Désignation
+                    </label>
+                    <input
+                      type="text"
+                      value={line.designation}
+                      onChange={(e) =>
+                        updateLine(i, { designation: e.target.value })
+                      }
+                      className="w-full border rounded px-2 py-1.5 text-sm text-gray-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500">
+                      Description (optionnelle)
+                    </label>
+                    <input
+                      type="text"
+                      value={line.description}
+                      onChange={(e) =>
+                        updateLine(i, { description: e.target.value })
+                      }
+                      className="w-full border rounded px-2 py-1.5 text-sm text-gray-800"
+                      placeholder="Description supplémentaire..."
+                    />
+                  </div>
+                </div>
 
                 {/* Details */}
                 {Object.keys(line.details).length > 0 && (

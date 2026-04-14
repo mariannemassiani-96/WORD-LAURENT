@@ -12,6 +12,8 @@ import {
   HeadingLevel,
   PageBreak,
   TableLayoutType,
+  PageNumber,
+  Footer,
 } from "docx";
 import { DevisConfig, DevisLine, ExtraLine } from "./types";
 import { CGV_CASAPERTURA } from "./cgv";
@@ -253,6 +255,21 @@ export async function generateWord(config: DevisConfig): Promise<Blob> {
           page: {
             margin: { top: 720, bottom: 720, left: 720, right: 720 },
           },
+        },
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({ text: "Page ", size: 16, font: "Calibri", color: "666666" }),
+                  new TextRun({ children: [PageNumber.CURRENT], size: 16, font: "Calibri", color: "666666" }),
+                  new TextRun({ text: " / ", size: 16, font: "Calibri", color: "666666" }),
+                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, font: "Calibri", color: "666666" }),
+                ],
+              }),
+            ],
+          }),
         },
         children: [
           // Header
