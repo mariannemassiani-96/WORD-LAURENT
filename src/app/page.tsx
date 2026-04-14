@@ -31,12 +31,16 @@ export default function Home() {
   const handleFileLoaded = useCallback((content: string) => {
     const positions = parseSialRtf(content);
 
-    const lines: DevisLine[] = positions.map((pos) => ({
+    const lines: DevisLine[] = positions.map((pos) => {
+      // Build a clear designation from available info
+      let designation = pos.type || pos.gamme || "Menuiserie";
+      if (pos.gamme && pos.type) {
+        designation = `${pos.gamme} - ${pos.type}`;
+      }
+      return {
       id: generateId(),
       position: pos.position,
-      designation: pos.type
-        ? `${pos.gamme || "Menuiserie"} - ${pos.type}`
-        : pos.gamme || "Menuiserie",
+      designation,
       description: "",
       details: {
         Gamme: pos.gamme,
@@ -56,7 +60,7 @@ export default function Home() {
       prixVenteUnitaireHT: pos.prixUnitaireHT * 1.3,
       totalVenteHT: pos.prixUnitaireHT * 1.3 * pos.quantite,
       isSialImport: true,
-    }));
+    }});
 
     // Compute eco-participation from SIAL data
     const ecoTotal = positions.length > 0 ? 3.56 : 0;

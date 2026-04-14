@@ -1,5 +1,8 @@
 import { SialPosition } from "./types";
 
+/**
+ * Strip RTF control codes and extract plain text with pipe separators.
+ */
 function stripRtf(rtf: string): string {
   let text = rtf;
 
@@ -18,8 +21,7 @@ function stripRtf(rtf: string): string {
     "f4": "\u00F4", "f9": "\u00F9", "fa": "\u00FA", "fb": "\u00FB",
     "fc": "\u00FC", "c0": "\u00C0", "c9": "\u00C9", "ca": "\u00CA",
     "a0": "\u00A0", "ab": "\u00AB", "bb": "\u00BB", "b0": "\u00B0",
-    "b2": "\u00B2", "a7": "\u00A7", "b7": "\u00B7", "2d": "-",
-    "20": " ",
+    "b2": "\u00B2", "a7": "\u00A7", "b7": "\u00B7",
   };
 
   text = text.replace(/\\'([0-9a-fA-F]{2})/g, (_, hex) => {
@@ -29,7 +31,6 @@ function stripRtf(rtf: string): string {
     return String.fromCharCode(code);
   });
 
-  // Remove RTF groups using brace counting
   let result = "";
   let depth = 0;
   let skipDepth = -1;
@@ -103,22 +104,66 @@ function stripRtf(rtf: string): string {
   return result.trim();
 }
 
+/**
+ * Extract readable text from binary .doc (OLE2) files.
+ * Finds ASCII/Latin text runs embedded in the binary stream.
+ */
+function extractTextFromBinaryDoc(data: string): string {
+  // Look for runs of printable characters (at least 4 chars long)
+  const runs: string[] = [];
+  let current = "";
+
+  for (let i = 0; i < data.length; i++) {
+    const code = data.charCodeAt(i);
+    // Printable ASCII + extended Latin
+    if ((code >= 32 && code <= 126) || (code >= 160 && code <= 255) || code === 10 || code === 13 || code === 9) {
+      current += data[i];
+    } else {
+      if (current.length >= 3) {
+        runs.push(current);
+      }
+      current = "";
+    }
+  }
+  if (current.length >= 3) runs.push(current);
+
+  return runs.join("\n");
+}
+
 function parseAmount(str: string): number {
-  // Parse "€ 707,63" or "5 661,04" or "€ 6 764,98"
-  const cleaned = str
+  // Parse "€ 707,63" or "5 661,04" or "€ 6 764,98" or "E 5 542,15"
+  let cleaned = str
     .replace(/[€\u20AC]/g, "")
     .replace(/\u00A0/g, "")
-    .replace(/\s+/g, "")
-    .replace(",", ".");
+    .trim();
+
+  // Handle "E 5 542,15" format (E = euro symbol in some docs)
+  cleaned = cleaned.replace(/^E\s+/, "");
+
+  // Remove spaces used as thousands separators (keep decimal comma)
+  // "5 542,15" -> "5542,15"
+  cleaned = cleaned.replace(/(\d)\s+(\d)/g, "$1$2");
+
+  // Replace comma with dot for decimal
+  cleaned = cleaned.replace(",", ".");
+
   const val = parseFloat(cleaned);
   return isNaN(val) ? 0 : val;
 }
 
-export function parseSialRtf(rtfContent: string): SialPosition[] {
-  const text = stripRtf(rtfContent);
+/**
+ * Parse content from a SIAL or CASAPERTURA document.
+ * Handles both RTF and binary .doc formats.
+ */
+export function parseSialRtf(fileContent: string): SialPosition[] {
+  // Detect if RTF or binary .doc
+  const isRtf = fileContent.trimStart().startsWith("{\\rtf");
+  const text = isRtf ? stripRtf(fileContent) : extractTextFromBinaryDoc(fileContent);
+
   const positions: SialPosition[] = [];
 
-  // Split the text into sections by "Position N|"
+  // Strategy 1: pipe-separated format (RTF output)
+  // Pattern: "Position N|TYPE||" or "Position N|TYPE|"
   const posRegex = /Position\s+(\d+)\|([^|\n]*)\|/g;
   const matches: { index: number; position: number; type: string }[] = [];
   let m;
@@ -130,26 +175,59 @@ export function parseSialRtf(rtfContent: string): SialPosition[] {
     });
   }
 
+  if (matches.length > 0) {
+    return parsePipeSeparated(text, matches);
+  }
+
+  // Strategy 2: plain text format (from binary .doc extraction)
+  // Pattern: "Position 1       Coulissant 4 Vantaux..."
+  const plainPosRegex = /Position\s+(\d+)\s{2,}(.+)/g;
+  const plainMatches: { index: number; position: number; title: string }[] = [];
+  while ((m = plainPosRegex.exec(text)) !== null) {
+    plainMatches.push({
+      index: m.index,
+      position: parseInt(m[1]),
+      title: m[2].trim(),
+    });
+  }
+
+  if (plainMatches.length > 0) {
+    return parsePlainText(text, plainMatches);
+  }
+
+  return positions;
+}
+
+function parsePipeSeparated(
+  text: string,
+  matches: { index: number; position: number; type: string }[]
+): SialPosition[] {
+  const positions: SialPosition[] = [];
+
   for (let mi = 0; mi < matches.length; mi++) {
     const start = matches[mi].index;
-    const end = mi + 1 < matches.length ? matches[mi + 1].index : text.indexOf("Total ht|", start);
-    const block = text.substring(start, end > start ? end : undefined);
+    const end =
+      mi + 1 < matches.length
+        ? matches[mi + 1].index
+        : text.indexOf("Total ht|", start + 50);
+    const block = text.substring(start, end > start ? end : start + 2000);
 
-    // Extract key-value pairs from pipe-separated lines
-    // Format: |Key|Value|Key|Value|...
+    // Extract key-value pairs from pipe-separated data
     const details: Record<string, string> = {};
     const detailRegex = /\|([^|]+)\|([^|]+)/g;
     let dm;
-    const blockForDetails = block.replace(/Position\s+\d+\|[^|]*\|[^|]*\|/, "");
+    const blockForDetails = block.replace(
+      /Position\s+\d+\|[^|]*\|[^|]*\|/,
+      ""
+    );
 
     while ((dm = detailRegex.exec(blockForDetails)) !== null) {
       const key = dm[1].trim();
       const val = dm[2].trim();
-      // Skip numeric/price-looking entries and meta entries
       if (
         key &&
         val &&
-        !key.match(/^(Total|Qté|x\s|\d|€)/) &&
+        !key.match(/^(Total|Qté|x\s|\d|€|E\s)/) &&
         !val.match(/^(Total|Qté)/) &&
         key !== "||" &&
         val !== "||"
@@ -158,34 +236,132 @@ export function parseSialRtf(rtfContent: string): SialPosition[] {
       }
     }
 
-    // Extract price info
+    // Extract price: look specifically for "Total unitaire ht" followed by a price
     let prixUnitaire = 0;
-    let quantite = 0;
+    let quantite = 1;
     let totalHT = 0;
 
-    // "Total unitaire ht\n€ 707,63" or "Total unitaire ht €707,63"
+    // Match price after "Total unitaire ht" - handle multiline and "€" or "E" prefix
     const prixMatch = block.match(
-      /Total unitaire ht[\s\n]*[€\u20AC]?\s*([\d\s,.]+)/i
+      /Total unitaire ht[\s\n|]*[€\u20ACE]?\s*([\d][\d\s]*[,.][\d]+)/i
     );
     if (prixMatch) prixUnitaire = parseAmount(prixMatch[1]);
 
-    const qtyMatch = block.match(/x\s*(\d+)/);
+    // Match quantity: "x N" but only near the price section (after "Total unitaire")
+    const priceSection = block.substring(
+      block.search(/Total unitaire/i) || 0
+    );
+    const qtyMatch = priceSection.match(/[x×]\s*(\d+)/);
     if (qtyMatch) quantite = parseInt(qtyMatch[1]);
 
+    // Match total HT
     const totalMatch = block.match(
-      /Total ht[\s\n]*[€\u20AC]?\s*([\d\s,.]+)/i
+      /Total ht[\s\n|]*[€\u20ACE]?\s*([\d][\d\s]*[,.][\d]+)/i
     );
     if (totalMatch) totalHT = parseAmount(totalMatch[1]);
+
+    // If no total found, calculate from unit price * qty
+    if (!totalHT && prixUnitaire) totalHT = prixUnitaire * quantite;
 
     positions.push({
       position: matches[mi].position,
       type: matches[mi].type,
       gamme: details["Gamme"] || "",
+      dimensions:
+        details["Dimensions (LxH)"] || details["Dimensions"] || "",
+      coloris: details["Coloris"] || "",
+      teinteAccessoires:
+        details["Teinte Accessoires"] || details["Coloris acc"] || "",
+      ouverture: details["Ouverture"] || "",
+      hauteurPoignee:
+        details["Hauteur poignée"] ||
+        details["Hauteur poignee"] ||
+        details["Hauteur poign\u00E9e"] ||
+        "",
+      vitrage: details["Vitrage"] || "",
+      poids: details["Poids"] || "",
+      surface: details["Surface"] || "",
+      prixUnitaireHT: prixUnitaire,
+      quantite: quantite,
+      totalHT: totalHT,
+      options: [],
+    });
+  }
+
+  return positions;
+}
+
+function parsePlainText(
+  text: string,
+  matches: { index: number; position: number; title: string }[]
+): SialPosition[] {
+  const positions: SialPosition[] = [];
+
+  for (let mi = 0; mi < matches.length; mi++) {
+    const start = matches[mi].index;
+    const end =
+      mi + 1 < matches.length ? matches[mi + 1].index : start + 3000;
+    const block = text.substring(start, end);
+
+    // Extract details from "Key    Value" format
+    const details: Record<string, string> = {};
+    const detailPatterns = [
+      "Gamme",
+      "Dimensions \\(LxH\\)",
+      "Coloris acc",
+      "Coloris",
+      "Hauteur poign[ée]e",
+      "Vitrage",
+      "Poids",
+      "Surface",
+      "Ouverture",
+      "Teinte Accessoires",
+    ];
+
+    for (const pattern of detailPatterns) {
+      const re = new RegExp(pattern + "\\s{2,}(.+)", "i");
+      const match = block.match(re);
+      if (match) {
+        const cleanKey = pattern
+          .replace("\\(", "(")
+          .replace("\\)", ")")
+          .replace("[ée]", "é");
+        details[cleanKey] = match[1].trim();
+      }
+    }
+
+    // Extract prices - "E 5 542,15" or "€ 5 542,15"
+    let prixUnitaire = 0;
+    let quantite = 1;
+    let totalHT = 0;
+
+    const prixMatch = block.match(
+      /Total unitaire ht[\s\S]*?[€E]\s*([\d][\d\s]*[,.][\d]+)/i
+    );
+    if (prixMatch) prixUnitaire = parseAmount(prixMatch[1]);
+
+    const qtyMatch = block.match(
+      /Total unitaire[\s\S]*?[x×]\s*(\d+)/i
+    );
+    if (qtyMatch) quantite = parseInt(qtyMatch[1]);
+
+    const totalMatch = block.match(
+      /Total ht[\s\S]*?[€E]\s*([\d][\d\s]*[,.][\d]+)/i
+    );
+    if (totalMatch) totalHT = parseAmount(totalMatch[1]);
+
+    if (!totalHT && prixUnitaire) totalHT = prixUnitaire * quantite;
+
+    positions.push({
+      position: matches[mi].position,
+      type: "",
+      gamme: details["Gamme"] || "",
       dimensions: details["Dimensions (LxH)"] || "",
       coloris: details["Coloris"] || "",
-      teinteAccessoires: details["Teinte Accessoires"] || "",
+      teinteAccessoires:
+        details["Teinte Accessoires"] || details["Coloris acc"] || "",
       ouverture: details["Ouverture"] || "",
-      hauteurPoignee: details["Hauteur poignée"] || details["Hauteur poignee"] || "",
+      hauteurPoignee: details["Hauteur poignée"] || "",
       vitrage: details["Vitrage"] || "",
       poids: details["Poids"] || "",
       surface: details["Surface"] || "",
