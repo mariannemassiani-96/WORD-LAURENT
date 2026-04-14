@@ -37,6 +37,8 @@ export interface DevisLine {
 export interface ExtraLine {
   id: string;
   designation: string;
+  coutAchatHT: number;
+  margePercent: number;
   prixUnitaireHT: number;
   quantite: number;
   totalHT: number;

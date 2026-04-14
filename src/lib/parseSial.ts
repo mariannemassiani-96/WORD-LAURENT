@@ -133,7 +133,14 @@ function extractTextFromBinaryDoc(data: string): string {
   }
   if (current.length >= 3) runs.push(current);
 
-  return runs.join("\n");
+  let text = runs.join("\n");
+  // Normalize: \r → \n
+  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Remove table formatting garbage (Width1WidthB3...)
+  text = text.replace(/Width\d*[A-Z]?\d*/g, "");
+  // Clean up excessive whitespace
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
 }
 
 /**
@@ -254,7 +261,9 @@ export function parseSialRtf(fileContent: string): SialPosition[] {
 }
 
 /**
- * Parse binary .doc extracted text where everything may be concatenated.
+ * Parse binary .doc extracted text.
+ * Text has \n-separated key/value pairs:
+ *   Gamme\nKawneer - AA3765-7 Kasting\n\nDimensions (LxH)\n3320 x 2610 mm\n...
  */
 function parseBinaryDocText(text: string): SialPosition[] {
   const positions: SialPosition[] = [];
@@ -269,7 +278,6 @@ function parseBinaryDocText(text: string): SialPosition[] {
 
   if (positionStarts.length === 0) return positions;
 
-  // Find "Total ht" after all positions to delimit the last block
   const lastPos = positionStarts[positionStarts.length - 1];
   const totalHtIdx = text.indexOf("Total ht", lastPos.index + 100);
 
@@ -280,83 +288,84 @@ function parseBinaryDocText(text: string): SialPosition[] {
       : (totalHtIdx > start ? totalHtIdx + 200 : start + 5000);
     const block = text.substring(start, end);
 
-    // Extract title: text after "Position N" on same or next line
+    // Extract title: line after "Position N"
     let title = "";
-    const titleMatch = block.match(/Position\s+\d+\s*\n?([^\n]+)/);
+    const titleMatch = block.match(/Position\s+\d+\s*\n([^\n]+)/);
     if (titleMatch) {
-      title = titleMatch[1].trim();
-      // Remove pipe characters and clean up
-      title = title.replace(/\|/g, "").trim();
+      title = titleMatch[1].replace(/\|/g, "").trim();
     }
 
-    // Extract key-value details using known keys
+    // Extract key-value details:
+    // Format is "Key\nValue\n\nKey\nValue" or "KeyValue" (concatenated)
     const details: Record<string, string> = {};
 
-    // Build a regex that matches known keys and captures everything up to the next key or "Options" or "Total"
-    const keysPattern = KNOWN_KEYS.map(k =>
-      k.replace(/[()]/g, "\\$&").replace(/é/g, "[ée]")
-    ).join("|");
-    const kvRegex = new RegExp(
-      `(${keysPattern})\\s*(?:\\||\\n)?\\s*([^|]*?)\\s*(?=${keysPattern}|Options|Total|$)`,
-      "gi"
-    );
+    // Build list of keys to search for (escaped for regex)
+    const keyNames = KNOWN_KEYS.map(k => ({
+      original: k,
+      pattern: k.replace(/[()]/g, "\\$&").replace(/é/g, "[ée]"),
+    }));
 
-    let km;
-    while ((km = kvRegex.exec(block)) !== null) {
-      const key = km[1].trim();
-      let val = km[2].trim();
-      // Clean up value - remove trailing pipes and empty lines
-      val = val.replace(/\|/g, "").replace(/\n/g, " ").trim();
-      if (val && val.length > 0 && val.length < 200) {
-        // Normalize key name
-        let normalizedKey = key;
-        if (/hauteur poign/i.test(key)) normalizedKey = "Hauteur poignée";
-        if (/coloris acc/i.test(key)) normalizedKey = "Coloris acc";
-        details[normalizedKey] = val;
+    for (const { original, pattern } of keyNames) {
+      // Try "Key\nValue" format (key on one line, value on next)
+      const re = new RegExp(pattern + "\\s*\\n([^\\n]+)", "i");
+      const match = block.match(re);
+      if (match) {
+        let val = match[1].trim();
+        // Skip if value is another key name or "Options" or garbage
+        if (!KNOWN_KEYS.some(k => val.startsWith(k)) && !val.startsWith("Options") && !val.match(/^Width/)) {
+          details[original] = val;
+        }
+      }
+      // Also try concatenated format "KeyValue" where value follows immediately
+      if (!details[original]) {
+        const re2 = new RegExp(pattern + "([A-Z0-9][^\\n]*?)(?=\\n|$)", "i");
+        const match2 = block.match(re2);
+        if (match2) {
+          let val = match2[1].trim();
+          if (val.length > 0 && val.length < 200 && !val.match(/^Width/)) {
+            details[original] = val;
+          }
+        }
       }
     }
 
-    // Extract options: everything between "Options" and "Total unitaire"
+    // Extract options: between "Options" and "Total unitaire" or next Position
     const options: string[] = [];
-    const optionsMatch = block.match(/Options\s*([\s\S]*?)(?=Total unitaire|Total ht|$)/i);
-    if (optionsMatch) {
-      let optText = optionsMatch[1].trim();
-      // Clean up and split into individual option lines
-      optText = optText.replace(/\|/g, "").trim();
-      // Split by known option patterns (lines starting with a capital letter or containing " - ")
-      const optLines = optText.split(/\n/).map(l => l.trim()).filter(l => l.length > 3);
-      if (optLines.length > 0) {
-        // If all on one line (concatenated), try to split by known patterns
-        if (optLines.length === 1 && optLines[0].length > 50) {
-          // Split concatenated options: look for known option prefixes
-          const optionPrefixes = [
-            "Etanchéité", "Étanchéité", "Gamme ", "Grille VMC",
-            "Habillage Ext", "Habillage Int", "Isolation",
-            "Passage Volet", "Plus Value", "Poignée", "Point De",
-            "Type de pose", "Type de traverse", "Typologie",
-            "Vantail", "Dormant", "Ouvrant",
-          ];
-          const prefixRegex = new RegExp(
-            `(${optionPrefixes.map(p => p.replace(/[éÉ]/g, "[éeÉE]")).join("|")})`,
-            "g"
-          );
-          const parts: string[] = [];
-          let lastIdx = 0;
-          let om;
-          while ((om = prefixRegex.exec(optLines[0])) !== null) {
-            if (om.index > lastIdx) {
-              const prev = optLines[0].substring(lastIdx, om.index).trim();
-              if (prev) parts.push(prev);
-            }
-            lastIdx = om.index;
-          }
-          if (lastIdx < optLines[0].length) {
-            parts.push(optLines[0].substring(lastIdx).trim());
-          }
-          options.push(...parts.filter(p => p.length > 3));
-        } else {
-          options.push(...optLines);
-        }
+    const optIdx = block.search(/\bOptions\b/i);
+    if (optIdx >= 0) {
+      const afterOpt = block.substring(optIdx + 7);
+      const optEnd = afterOpt.search(/Total unitaire|Total ht/i);
+      const optText = optEnd > 0 ? afterOpt.substring(0, optEnd) : afterOpt.substring(0, 2000);
+
+      // Split by newlines and filter meaningful lines
+      const optLines = optText
+        .split("\n")
+        .map(l => l.replace(/\|/g, "").trim())
+        .filter(l =>
+          l.length > 3 &&
+          !l.match(/^Width/i) &&
+          !l.match(/^\d+$/) &&
+          !l.match(/^[|.\s]+$/) &&
+          !KNOWN_KEYS.some(k => l === k)
+        );
+
+      // If lines are too few but text is long, it's concatenated - split by known prefixes
+      if (optLines.length <= 2 && optLines.join("").length > 80) {
+        const concat = optLines.join(" ");
+        const optionPrefixes = [
+          "Etanchéité", "Étanchéité", "Gamme ", "Grille VMC",
+          "Habillage Ext", "Habillage Int", "Isolation",
+          "Passage Volet", "Plus Value", "Poignée", "Point De",
+          "Type de pose", "Type de traverse", "Typologie",
+          "Vantail De", "Dormant",
+        ];
+        const prefixPattern = optionPrefixes
+          .map(p => p.replace(/[éÉ]/g, "[éeÉE]"))
+          .join("|");
+        const parts = concat.split(new RegExp(`(?=${prefixPattern})`, "g"));
+        options.push(...parts.map(p => p.trim()).filter(p => p.length > 3));
+      } else {
+        options.push(...optLines);
       }
     }
 

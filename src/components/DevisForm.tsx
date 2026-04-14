@@ -37,6 +37,8 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
   function updateExtraLine(index: number, updates: Partial<ExtraLine>) {
     const newLines = [...config.extraLines];
     const line = { ...newLines[index], ...updates };
+    // Recalculate: prix vente = cout achat * (1 + marge%)
+    line.prixUnitaireHT = line.coutAchatHT * (1 + line.margePercent / 100);
     line.totalHT = line.prixUnitaireHT * line.quantite;
     newLines[index] = line;
     onChange({ ...config, extraLines: newLines });
@@ -50,6 +52,8 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
         {
           id: generateId(),
           designation: "",
+          coutAchatHT: 0,
+          margePercent: 30,
           prixUnitaireHT: 0,
           quantite: 1,
           totalHT: 0,
@@ -255,17 +259,51 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
                   </div>
                 )}
 
-                {/* Options */}
-                {line.options && line.options.length > 0 && (
-                  <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
-                    <p className="text-xs font-semibold text-blue-700 mb-1">Options :</p>
-                    <div className="text-xs text-blue-800 space-y-0.5">
-                      {line.options.map((opt, oi) => (
-                        <p key={oi}>{opt}</p>
-                      ))}
-                    </div>
+                {/* Options - editable */}
+                <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-xs font-semibold text-blue-700">Options :</p>
+                    <button
+                      onClick={() => {
+                        const opts = [...(line.options || []), ""];
+                        updateLine(i, { options: opts });
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-xs"
+                    >
+                      + Ajouter
+                    </button>
                   </div>
-                )}
+                  {(line.options || []).length === 0 && (
+                    <p className="text-xs text-blue-400 italic">Aucune option</p>
+                  )}
+                  <div className="space-y-1">
+                    {(line.options || []).map((opt, oi) => (
+                      <div key={oi} className="flex gap-1">
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => {
+                            const opts = [...(line.options || [])];
+                            opts[oi] = e.target.value;
+                            updateLine(i, { options: opts });
+                          }}
+                          className="flex-1 border border-blue-200 rounded px-2 py-1 text-xs text-blue-800 bg-white"
+                        />
+                        <button
+                          onClick={() => {
+                            const opts = (line.options || []).filter(
+                              (_, idx) => idx !== oi
+                            );
+                            updateLine(i, { options: opts });
+                          }}
+                          className="text-red-400 hover:text-red-600 text-xs px-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <div>
@@ -358,69 +396,89 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
           {config.extraLines.map((line, i) => (
             <div
               key={line.id}
-              className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end border rounded-lg p-3 bg-gray-50"
+              className="border rounded-lg p-3 bg-gray-50 space-y-2"
             >
-              <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-gray-500">
-                  Désignation
-                </label>
+              <div className="flex justify-between items-center">
                 <input
                   type="text"
                   value={line.designation}
                   onChange={(e) =>
                     updateExtraLine(i, { designation: e.target.value })
                   }
-                  className="w-full border rounded px-2 py-1.5 text-sm text-gray-800"
+                  className="flex-1 border rounded px-2 py-1.5 text-sm text-gray-800 font-semibold"
                   placeholder="Ex: Pose de la menuiserie"
                 />
+                <button
+                  onClick={() => removeExtraLine(i)}
+                  className="text-red-500 hover:text-red-700 ml-2 text-sm"
+                >
+                  Supprimer
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500">
-                  Prix unitaire HT
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={line.prixUnitaireHT}
-                  onChange={(e) =>
-                    updateExtraLine(i, {
-                      prixUnitaireHT: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  className="w-full border rounded px-2 py-1.5 text-sm text-gray-800"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500">
-                  Quantité
-                </label>
-                <input
-                  type="number"
-                  value={line.quantite}
-                  onChange={(e) =>
-                    updateExtraLine(i, {
-                      quantite: parseInt(e.target.value) || 1,
-                    })
-                  }
-                  className="w-full border rounded px-2 py-1.5 text-sm text-gray-800"
-                />
-              </div>
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                <div>
                   <label className="block text-xs font-medium text-gray-500">
-                    Total HT
+                    Coût achat HT
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={line.coutAchatHT}
+                    onChange={(e) =>
+                      updateExtraLine(i, {
+                        coutAchatHT: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full border rounded px-2 py-1.5 text-sm text-gray-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-orange-600 font-bold">
+                    Marge %
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={line.margePercent}
+                    onChange={(e) =>
+                      updateExtraLine(i, {
+                        margePercent: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full border-2 border-orange-300 rounded px-2 py-1.5 text-sm font-bold text-orange-700 bg-orange-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500">
+                    Prix vente HT
+                  </label>
+                  <div className="px-2 py-1.5 text-sm font-semibold text-green-700 bg-green-50 rounded border border-green-200">
+                    {fmt(line.prixUnitaireHT)} &euro;
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500">
+                    Quantité
+                  </label>
+                  <input
+                    type="number"
+                    value={line.quantite}
+                    onChange={(e) =>
+                      updateExtraLine(i, {
+                        quantite: parseInt(e.target.value) || 1,
+                      })
+                    }
+                    className="w-full border rounded px-2 py-1.5 text-sm text-gray-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500">
+                    Total vente HT
                   </label>
                   <div className="px-2 py-1.5 text-sm font-bold text-green-800 bg-green-100 rounded border border-green-300">
                     {fmt(line.totalHT)} &euro;
                   </div>
                 </div>
-                <button
-                  onClick={() => removeExtraLine(i)}
-                  className="text-red-500 hover:text-red-700 p-1.5"
-                  title="Supprimer"
-                >
-                  ✕
-                </button>
               </div>
             </div>
           ))}
@@ -467,6 +525,86 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
           </div>
         </div>
       </div>
+      {/* Résumé coûts / marges */}
+      {(config.lines.length > 0 || config.extraLines.length > 0) && (
+        <div className="bg-white rounded-xl shadow p-5">
+          <h3 className="font-bold text-lg text-gray-800 mb-3">
+            Récapitulatif coûts / marges
+          </h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-100 text-left">
+                <th className="px-3 py-2 text-xs font-semibold text-gray-600">Ligne</th>
+                <th className="px-3 py-2 text-xs font-semibold text-gray-600 text-right">Coût achat HT</th>
+                <th className="px-3 py-2 text-xs font-semibold text-gray-600 text-right">Marge %</th>
+                <th className="px-3 py-2 text-xs font-semibold text-gray-600 text-right">Prix vente HT</th>
+                <th className="px-3 py-2 text-xs font-semibold text-gray-600 text-right">Marge &euro;</th>
+              </tr>
+            </thead>
+            <tbody>
+              {config.lines.map((line, i) => {
+                const coutTotal = line.prixUnitaireHT * line.quantite;
+                const venteTotal = line.totalVenteHT;
+                const margeEuros = venteTotal - coutTotal;
+                return (
+                  <tr key={line.id} className="border-b">
+                    <td className="px-3 py-1.5 text-xs">Pos. {i + 1} - {line.designation}</td>
+                    <td className="px-3 py-1.5 text-xs text-right">{fmt(coutTotal)} &euro;</td>
+                    <td className="px-3 py-1.5 text-xs text-right text-orange-600 font-semibold">{line.margePercent}%</td>
+                    <td className="px-3 py-1.5 text-xs text-right">{fmt(venteTotal)} &euro;</td>
+                    <td className="px-3 py-1.5 text-xs text-right font-semibold text-green-700">{fmt(margeEuros)} &euro;</td>
+                  </tr>
+                );
+              })}
+              {config.extraLines.map((line, i) => {
+                const coutTotal = line.coutAchatHT * line.quantite;
+                const margeEuros = line.totalHT - coutTotal;
+                return (
+                  <tr key={line.id} className="border-b">
+                    <td className="px-3 py-1.5 text-xs">{line.designation || `Ligne sup. ${i + 1}`}</td>
+                    <td className="px-3 py-1.5 text-xs text-right">{fmt(coutTotal)} &euro;</td>
+                    <td className="px-3 py-1.5 text-xs text-right text-orange-600 font-semibold">{line.margePercent}%</td>
+                    <td className="px-3 py-1.5 text-xs text-right">{fmt(line.totalHT)} &euro;</td>
+                    <td className="px-3 py-1.5 text-xs text-right font-semibold text-green-700">{fmt(margeEuros)} &euro;</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-50 font-bold">
+                <td className="px-3 py-2 text-xs">TOTAL</td>
+                <td className="px-3 py-2 text-xs text-right">
+                  {fmt(
+                    config.lines.reduce((s, l) => s + l.prixUnitaireHT * l.quantite, 0) +
+                    config.extraLines.reduce((s, l) => s + l.coutAchatHT * l.quantite, 0)
+                  )} &euro;
+                </td>
+                <td className="px-3 py-2 text-xs text-right text-orange-600">
+                  {(() => {
+                    const totalAchat = config.lines.reduce((s, l) => s + l.prixUnitaireHT * l.quantite, 0) +
+                      config.extraLines.reduce((s, l) => s + l.coutAchatHT * l.quantite, 0);
+                    const totalVente = config.lines.reduce((s, l) => s + l.totalVenteHT, 0) +
+                      config.extraLines.reduce((s, l) => s + l.totalHT, 0);
+                    return totalAchat > 0 ? fmt(((totalVente - totalAchat) / totalAchat) * 100) + "%" : "—";
+                  })()}
+                </td>
+                <td className="px-3 py-2 text-xs text-right">
+                  {fmt(
+                    config.lines.reduce((s, l) => s + l.totalVenteHT, 0) +
+                    config.extraLines.reduce((s, l) => s + l.totalHT, 0)
+                  )} &euro;
+                </td>
+                <td className="px-3 py-2 text-xs text-right text-green-700">
+                  {fmt(
+                    config.lines.reduce((s, l) => s + l.totalVenteHT - l.prixUnitaireHT * l.quantite, 0) +
+                    config.extraLines.reduce((s, l) => s + l.totalHT - l.coutAchatHT * l.quantite, 0)
+                  )} &euro;
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
