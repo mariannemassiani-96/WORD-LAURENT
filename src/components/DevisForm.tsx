@@ -241,7 +241,7 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
 
                 {/* Details */}
                 {Object.keys(line.details).length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-1 mb-3 text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-1 mb-2 text-xs">
                     {Object.entries(line.details).map(([k, v]) =>
                       v ? (
                         <div key={k}>
@@ -252,6 +252,18 @@ export default function DevisForm({ config, onChange }: DevisFormProps) {
                         </div>
                       ) : null
                     )}
+                  </div>
+                )}
+
+                {/* Options */}
+                {line.options && line.options.length > 0 && (
+                  <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Options :</p>
+                    <div className="text-xs text-blue-800 space-y-0.5">
+                      {line.options.map((opt, oi) => (
+                        <p key={oi}>{opt}</p>
+                      ))}
+                    </div>
                   </div>
                 )}
 
